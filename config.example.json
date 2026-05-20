@@ -1,0 +1,6 @@
+{
+  "server_url": "http://localhost:4004",
+  "provider": "claude",
+  "language": "ja",
+  "last_input_dir": ""
+}
