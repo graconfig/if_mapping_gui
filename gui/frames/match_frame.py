@@ -5,6 +5,7 @@ from pathlib import Path
 from tkinter import filedialog
 from datetime import datetime
 
+import openpyxl
 import customtkinter as ctk
 
 import config
@@ -21,6 +22,7 @@ def match_worker(
     provider: str,
     language: str,
     server_url: str,
+    excel_cfg: dict,
     q: queue.Queue,
     stop: threading.Event,
 ) -> None:
@@ -37,7 +39,9 @@ def match_worker(
         return
 
     all_results: list[dict] = []
-    all_raw: dict[str, list[dict]] = {}
+    all_wb: dict[str, openpyxl.Workbook] = {}
+    all_row_indices: dict[str, set[int]] = {}
+    all_directions: dict[str, str] = {}
 
     for i, file_str in enumerate(files):
         if stop.is_set():
@@ -46,9 +50,11 @@ def match_worker(
 
         path = Path(file_str)
         try:
-            fields, raw_rows = read_fields(path)
-            all_raw[file_str] = raw_rows
-            log(f"解析 {path.name} — {len(fields)} 条字段")
+            fields, workbook, direction = read_fields(path, excel_cfg)
+            all_wb[file_str] = workbook
+            all_row_indices[file_str] = {f.rowIndex for f in fields}
+            all_directions[file_str] = direction
+            log(f"解析 {path.name} — {len(fields)} 条字段 [{direction}]")
         except ExcelReadError as e:
             log(str(e), "error")
             continue
@@ -60,16 +66,22 @@ def match_worker(
                 language=language,
             )
             all_results.extend(results)
-            exact = sum(1 for r in results if r.get("matchType") == "exact")
-            vector = sum(1 for r in results if r.get("matchType") == "vector")
-            ai = sum(1 for r in results if r.get("matchType") == "ai")
-            log(f"匹配完成: {len(results)} 条 (精确 {exact} · 向量 {vector} · AI {ai})", "step")
+            custom = sum(1 for r in results if r.get("matchSource") == "custom")
+            ai     = sum(1 for r in results if r.get("matchSource") == "ai")
+            log(f"匹配完成: {len(results)} 条 (知识库 {custom} · AI {ai})", "step")
         except Exception as e:
             log(f"{path.name} 匹配失败: {e}", "error")
 
         q.put({"type": "progress", "pct": (i + 1) / len(files)})
 
-    q.put({"type": "done", "results": all_results, "raw": all_raw, "files": files})
+    q.put({
+        "type": "done",
+        "results": all_results,
+        "wb": all_wb,
+        "row_indices": all_row_indices,
+        "directions": all_directions,
+        "files": files,
+    })
 
 
 class MatchFrame(BaseFrame):
@@ -77,7 +89,9 @@ class MatchFrame(BaseFrame):
         super().__init__(master, app, **kwargs)
         self._files: list[str] = []
         self._results: list[dict] = []
-        self._raw: dict[str, list[dict]] = {}
+        self._wb: dict[str, openpyxl.Workbook] = {}
+        self._row_indices: dict[str, set[int]] = {}
+        self._directions: dict[str, str] = {}
         self._queue: queue.Queue = queue.Queue()
         self._stop_event = threading.Event()
         self._build()
@@ -85,7 +99,6 @@ class MatchFrame(BaseFrame):
     def _build(self):
         pad = {"padx": 16, "pady": 6}
 
-        # Drop zone (click to select)
         self._drop_zone = ctk.CTkButton(
             self, text="📂  点击选择 Excel 文件（可多选）\n支持 .xlsx / .xls",
             height=72, fg_color="#1e293b", hover_color="#334155",
@@ -93,11 +106,9 @@ class MatchFrame(BaseFrame):
         )
         self._drop_zone.pack(fill="x", **pad)
 
-        # File list
         self._file_list_frame = ctk.CTkScrollableFrame(self, height=80, fg_color="#1e293b")
         self._file_list_frame.pack(fill="x", padx=16, pady=(0, 6))
 
-        # Options row
         opts = ctk.CTkFrame(self, fg_color="transparent")
         opts.pack(fill="x", padx=16, pady=(0, 6))
         ctk.CTkLabel(opts, text="Provider", font=("", 10), text_color="gray").grid(row=0, column=0, sticky="w")
@@ -114,16 +125,13 @@ class MatchFrame(BaseFrame):
                                        fg_color="#1e293b", command=self._stop, state="disabled")
         self._stop_btn.grid(row=1, column=3)
 
-        # Progress bar
         self._progress = ctk.CTkProgressBar(self)
         self._progress.set(0)
         self._progress.pack(fill="x", padx=16, pady=(0, 6))
 
-        # Log area
         self._log = ctk.CTkTextbox(self, height=160, font=("Consolas", 10), state="disabled")
         self._log.pack(fill="both", expand=True, padx=16, pady=(0, 6))
 
-        # Result + export bar
         result_bar = ctk.CTkFrame(self, fg_color="transparent")
         result_bar.pack(fill="x", padx=16, pady=(0, 10))
         self._result_label = ctk.CTkLabel(result_bar, text="", font=("", 11), text_color="gray")
@@ -161,7 +169,6 @@ class MatchFrame(BaseFrame):
         self._refresh_file_list()
 
     def _log_append(self, text: str, level: str = "info"):
-        color = LOG_COLORS.get(level, "white")
         self._log.configure(state="normal")
         self._log.insert("end", text + "\n")
         self._log.see("end")
@@ -172,7 +179,9 @@ class MatchFrame(BaseFrame):
             self._log_append("[ERROR] 请先选择 Excel 文件", "error")
             return
         self._results.clear()
-        self._raw.clear()
+        self._wb.clear()
+        self._row_indices.clear()
+        self._directions.clear()
         self._stop_event.clear()
         self._start_btn.configure(state="disabled")
         self._stop_btn.configure(state="normal")
@@ -180,11 +189,12 @@ class MatchFrame(BaseFrame):
         self._progress.set(0)
         self._progress.configure(progress_color=("#7b8cde", "#7b8cde"))
 
+        excel_cfg = self.app.cfg.get("excel", config.EXCEL_DEFAULTS)
         t = threading.Thread(
             target=match_worker,
             args=(list(self._files), self._provider_var.get(), self._lang_var.get(),
                   self.app.cfg.get("server_url", "http://localhost:4004"),
-                  self._queue, self._stop_event),
+                  excel_cfg, self._queue, self._stop_event),
             daemon=True,
         )
         t.start()
@@ -204,7 +214,9 @@ class MatchFrame(BaseFrame):
                     self._progress.set(msg["pct"])
                 elif msg["type"] == "done":
                     self._results = msg["results"]
-                    self._raw = msg["raw"]
+                    self._wb = msg["wb"]
+                    self._row_indices = msg["row_indices"]
+                    self._directions = msg["directions"]
                     self._on_done()
                     return
                 elif msg["type"] == "error":
@@ -215,11 +227,10 @@ class MatchFrame(BaseFrame):
         self.after(100, self._poll)
 
     def _on_done(self):
-        exact = sum(1 for r in self._results if r.get("matchType") == "exact")
-        vector = sum(1 for r in self._results if r.get("matchType") == "vector")
-        ai = sum(1 for r in self._results if r.get("matchType") == "ai")
+        custom = sum(1 for r in self._results if r.get("matchSource") == "custom")
+        ai     = sum(1 for r in self._results if r.get("matchSource") == "ai")
         self._result_label.configure(
-            text=f"完成: {len(self._results)} 条 ｜ 精确 {exact} ｜ 向量 {vector} ｜ AI {ai}"
+            text=f"完成: {len(self._results)} 条 ｜ 知识库 {custom} ｜ AI {ai}"
         )
         self._progress.set(1.0)
         self._start_btn.configure(state="normal")
@@ -232,10 +243,15 @@ class MatchFrame(BaseFrame):
         self._stop_btn.configure(state="disabled")
 
     def _export(self):
+        excel_cfg = self.app.cfg.get("excel", config.EXCEL_DEFAULTS)
         for file_str in self._files:
-            raw_rows = self._raw.get(file_str)
-            if not raw_rows:
+            workbook = self._wb.get(file_str)
+            if workbook is None:
                 continue
-            file_results = [r for r in self._results if r.get("rowIndex") in {rr["rowIndex"] for rr in raw_rows}]
-            out = write_results(Path(file_str), raw_rows, file_results)
+            row_idxs = self._row_indices.get(file_str, set())
+            file_results = [r for r in self._results if r.get("rowIndex") in row_idxs]
+            direction = self._directions.get(file_str, "normal")
+            output_cols = excel_cfg["directions"][direction]["output_cols"]
+            sheet_data = excel_cfg.get("sheet_data", "IFマッピング定義")
+            out = write_results(Path(file_str), workbook, file_results, output_cols, sheet_data)
             self._log_append(f"已导出: {out.name}", "info")
