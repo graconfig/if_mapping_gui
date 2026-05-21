@@ -34,3 +34,27 @@ def test_save_creates_file_if_missing():
     assert not config.CONFIG_PATH.exists()
     config.save(config.load())
     assert config.CONFIG_PATH.exists()
+
+def test_load_returns_excel_defaults_when_no_file():
+    cfg = config.load()
+    assert "excel" in cfg
+    assert cfg["excel"]["sheet_head"] == "対象IF"
+    assert cfg["excel"]["sheet_data"] == "IFマッピング定義"
+    assert cfg["excel"]["header_row"] == 6
+    assert cfg["excel"]["start_row"] == 5
+    assert cfg["excel"]["detection"]["col"] == "F"
+    assert cfg["excel"]["detection"]["row"] == 6
+    assert cfg["excel"]["detection"]["keyword"] == "SAP"
+    assert cfg["excel"]["directions"]["normal"]["input_row_cols"]["field_name"] == "C"
+    assert cfg["excel"]["directions"]["sap"]["input_row_cols"]["field_name"] == "S"
+
+def test_load_deep_merges_partial_excel_config():
+    config.CONFIG_PATH.write_text(json.dumps({
+        "excel": {"sheet_head": "MySheet", "directions": {"normal": {"input_row_cols": {"field_name": "B"}}}}
+    }))
+    cfg = config.load()
+    assert cfg["excel"]["sheet_head"] == "MySheet"           # overridden
+    assert cfg["excel"]["sheet_data"] == "IFマッピング定義"   # default preserved
+    assert cfg["excel"]["directions"]["normal"]["input_row_cols"]["field_name"] == "B"  # overridden
+    assert cfg["excel"]["directions"]["normal"]["input_row_cols"]["field_text"] == "L"  # default preserved
+    assert "sap" in cfg["excel"]["directions"]                # other direction preserved
