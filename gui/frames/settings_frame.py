@@ -2,6 +2,7 @@
 import threading
 import customtkinter as ctk
 import config
+import i18n
 from config import EXCEL_DEFAULTS
 from gui.frames import BaseFrame
 
@@ -55,37 +56,51 @@ class SettingsFrame(BaseFrame):
         outer.pack(fill="both", expand=True)
         pad = {"padx": 20, "pady": 8}
 
-        ctk.CTkLabel(outer, text="设置", font=("", 16, "bold")).pack(anchor="w", padx=20, pady=(20, 4))
+        self._title_label = ctk.CTkLabel(outer, text=i18n.t("settings.title"), font=("", 16, "bold"))
+        self._title_label.pack(anchor="w", padx=20, pady=(20, 4))
 
         # ── CAP URL ──────────────────────────────────────────────────────────
         url_frame = ctk.CTkFrame(outer, fg_color="transparent")
         url_frame.pack(fill="x", **pad)
-        ctk.CTkLabel(url_frame, text="CAP 服务地址", font=("", 11)).pack(anchor="w")
+        self._cap_url_label = ctk.CTkLabel(url_frame, text=i18n.t("settings.cap_url_label"), font=("", 11))
+        self._cap_url_label.pack(anchor="w")
         row = ctk.CTkFrame(url_frame, fg_color="transparent")
         row.pack(fill="x")
-        self._url_entry = ctk.CTkEntry(row, width=280)
+        self._url_entry = ctk.CTkEntry(row, width=240)
         self._url_entry.insert(0, self.app.cfg.get("server_url", "http://localhost:4004"))
         self._url_entry.pack(side="left", padx=(0, 8))
-        ctk.CTkButton(row, text="🔌 测试连接", width=110, command=self._test_conn).pack(side="left", padx=(0, 8))
+        self._timeout_label = ctk.CTkLabel(row, text=i18n.t("settings.timeout_label"), font=("", 10), text_color="#64748b")
+        self._timeout_label.pack(side="left")
+        self._timeout_entry = ctk.CTkEntry(row, width=60)
+        self._timeout_entry.insert(0, str(self.app.cfg.get("timeout", 600)))
+        self._timeout_entry.pack(side="left", padx=(4, 8))
+        self._test_conn_btn = ctk.CTkButton(row, text=i18n.t("settings.test_conn_btn"), width=110, command=self._test_conn)
+        self._test_conn_btn.pack(side="left", padx=(0, 8))
         self._conn_status = ctk.CTkLabel(row, text="", font=("", 11))
         self._conn_status.pack(side="left")
 
-        # ── Provider + Language ───────────────────────────────────────────────
+        # ── Provider + Language + UI Language ─────────────────────────────────
         opts_frame = ctk.CTkFrame(outer, fg_color="transparent")
         opts_frame.pack(fill="x", **pad)
-        ctk.CTkLabel(opts_frame, text="默认 Provider", font=("", 11)).grid(row=0, column=0, sticky="w")
+        self._provider_label = ctk.CTkLabel(opts_frame, text=i18n.t("settings.provider_label"), font=("", 11))
+        self._provider_label.grid(row=0, column=0, sticky="w")
         self._provider_var = ctk.StringVar(value=self.app.cfg.get("provider", "claude"))
         ctk.CTkOptionMenu(opts_frame, variable=self._provider_var,
                           values=["claude", "openai", "gemini"], width=140).grid(row=1, column=0, padx=(0, 20))
-        ctk.CTkLabel(opts_frame, text="默认语言", font=("", 11)).grid(row=0, column=1, sticky="w")
+        self._lang_label = ctk.CTkLabel(opts_frame, text=i18n.t("settings.lang_label"), font=("", 11))
+        self._lang_label.grid(row=0, column=1, sticky="w")
         self._lang_var = ctk.StringVar(value=self.app.cfg.get("language", "ja"))
         ctk.CTkOptionMenu(opts_frame, variable=self._lang_var,
-                          values=["ja", "en", "zh"], width=140).grid(row=1, column=1)
+                          values=["ja", "en", "zh"], width=140).grid(row=1, column=1, padx=(0, 20))
+        self._ui_lang_label = ctk.CTkLabel(opts_frame, text=i18n.t("settings.ui_lang_label"), font=("", 11))
+        self._ui_lang_label.grid(row=0, column=2, sticky="w")
+        self._ui_lang_var = ctk.StringVar(value=self.app.cfg.get("ui_language", "zh"))
+        ctk.CTkOptionMenu(opts_frame, variable=self._ui_lang_var,
+                          values=["zh", "ja"], width=100).grid(row=1, column=2)
 
         # ── Excel 列配置 ──────────────────────────────────────────────────────
-        ctk.CTkLabel(outer, text="Excel 列配置", font=("", 13, "bold")).pack(
-            anchor="w", padx=20, pady=(16, 4)
-        )
+        self._excel_label = ctk.CTkLabel(outer, text=i18n.t("settings.excel_section"), font=("", 13, "bold"))
+        self._excel_label.pack(anchor="w", padx=20, pady=(16, 4))
         excel_section = ctk.CTkFrame(outer, fg_color="#1e293b", corner_radius=8)
         excel_section.pack(fill="x", padx=20, pady=(0, 8))
 
@@ -102,47 +117,46 @@ class SettingsFrame(BaseFrame):
 
         global_frame = ctk.CTkFrame(excel_section, fg_color="transparent")
         global_frame.pack(fill="x", padx=12, pady=(10, 4))
-        self._sheet_head_entry  = _labeled_entry(global_frame, "Sheet（抬头）", excel_cfg["sheet_head"])
-        self._sheet_data_entry  = _labeled_entry(global_frame, "Sheet（数据）", excel_cfg["sheet_data"])
-        self._header_row_entry  = _labeled_entry(global_frame, "抬头行", excel_cfg["header_row"], width=60)
-        self._start_row_entry   = _labeled_entry(global_frame, "起始行", excel_cfg["start_row"],  width=60)
+        self._sheet_head_entry  = _labeled_entry(global_frame, i18n.t("settings.sheet_head"), excel_cfg["sheet_head"])
+        self._sheet_data_entry  = _labeled_entry(global_frame, i18n.t("settings.sheet_data"), excel_cfg["sheet_data"])
+        self._header_row_entry  = _labeled_entry(global_frame, i18n.t("settings.header_row"), excel_cfg["header_row"], width=60)
+        self._start_row_entry   = _labeled_entry(global_frame, i18n.t("settings.start_row"),  excel_cfg["start_row"],  width=60)
 
         det_frame = ctk.CTkFrame(excel_section, fg_color="transparent")
         det_frame.pack(fill="x", padx=12, pady=(4, 8))
         det = excel_cfg["detection"]
-        self._det_col_entry     = _labeled_entry(det_frame, "检测列", det["col"],     width=52)
-        self._det_row_entry     = _labeled_entry(det_frame, "检测行", det["row"],     width=60)
-        self._det_keyword_entry = _labeled_entry(det_frame, "关键字", det["keyword"], width=80)
+        self._det_col_entry     = _labeled_entry(det_frame, i18n.t("settings.det_col"),     det["col"],     width=52)
+        self._det_row_entry     = _labeled_entry(det_frame, i18n.t("settings.det_row"),     det["row"],     width=60)
+        self._det_keyword_entry = _labeled_entry(det_frame, i18n.t("settings.det_keyword"), det["keyword"], width=80)
 
         tab = ctk.CTkTabview(excel_section)
         tab.pack(fill="x", padx=12, pady=(0, 12))
-        tab.add("普通方向")
-        tab.add("SAP方向")
+        tab.add(i18n.t("settings.dir_normal"))
+        tab.add(i18n.t("settings.dir_sap"))
 
-        for direction, tab_name, hkey, rkey, okey in [
-            ("normal", "普通方向", "normal_header", "normal_row", "normal_output"),
-            ("sap",    "SAP方向",  "sap_header",    "sap_row",    "sap_output"),
+        for direction, tab_key, hkey, rkey, okey in [
+            ("normal", "settings.dir_normal", "normal_header", "normal_row", "normal_output"),
+            ("sap",    "settings.dir_sap",    "sap_header",    "sap_row",    "sap_output"),
         ]:
             dir_cfg = excel_cfg["directions"][direction]
-            scroll = ctk.CTkScrollableFrame(tab.tab(tab_name), height=340)
+            scroll = ctk.CTkScrollableFrame(tab.tab(i18n.t(tab_key)), height=340)
             scroll.pack(fill="both", expand=True)
-            _build_col_grid(scroll, "抬头列",    dir_cfg["input_header_cols"], self._excel_entries[hkey])
-            _build_col_grid(scroll, "输入数据列", dir_cfg["input_row_cols"],    self._excel_entries[rkey])
-            _build_col_grid(scroll, "输出列",    dir_cfg["output_cols"],       self._excel_entries[okey])
+            _build_col_grid(scroll, i18n.t("settings.input_header_cols"), dir_cfg["input_header_cols"], self._excel_entries[hkey])
+            _build_col_grid(scroll, i18n.t("settings.input_row_cols"),    dir_cfg["input_row_cols"],    self._excel_entries[rkey])
+            _build_col_grid(scroll, i18n.t("settings.output_cols"),       dir_cfg["output_cols"],       self._excel_entries[okey])
 
-        ctk.CTkButton(outer, text="💾 保存设置", width=120, command=self._save).pack(
-            anchor="e", padx=20, pady=12
-        )
+        self._save_settings_btn = ctk.CTkButton(outer, text=i18n.t("settings.save_btn"), width=120, command=self._save)
+        self._save_settings_btn.pack(anchor="e", padx=20, pady=12)
 
     def _test_conn(self):
         url = self._url_entry.get().strip()
-        self._conn_status.configure(text="测试中…", text_color="gray")
+        self._conn_status.configure(text=i18n.t("settings.testing"), text_color="gray")
 
         def _check():
             from api.cap_client import CapClient
             ok = CapClient(url).ping()
             self.after(0, lambda: self._conn_status.configure(
-                text="✓ 已连接" if ok else "✗ 无法连接",
+                text=i18n.t("settings.connected") if ok else i18n.t("settings.disconnected"),
                 text_color="#22c55e" if ok else "#ef4444",
             ))
 
@@ -152,6 +166,12 @@ class SettingsFrame(BaseFrame):
         self.app.cfg["server_url"] = self._url_entry.get().strip()
         self.app.cfg["provider"]   = self._provider_var.get()
         self.app.cfg["language"]   = self._lang_var.get()
+        new_ui_lang = self._ui_lang_var.get()
+        self.app.cfg["ui_language"] = new_ui_lang
+        try:
+            self.app.cfg["timeout"] = int(self._timeout_entry.get())
+        except ValueError:
+            pass
 
         excel_cfg = self.app.cfg.setdefault("excel", {})
         excel_cfg["sheet_head"] = self._sheet_head_entry.get().strip()
@@ -185,5 +205,21 @@ class SettingsFrame(BaseFrame):
             }
 
         config.save(self.app.cfg)
+
+        if new_ui_lang != i18n.current():
+            i18n.load(new_ui_lang)
+            self.app.retranslate()
+
         self.app.update_status(False)
         self.app._refresh_status()
+
+    def retranslate(self) -> None:
+        self._title_label.configure(text=i18n.t("settings.title"))
+        self._cap_url_label.configure(text=i18n.t("settings.cap_url_label"))
+        self._timeout_label.configure(text=i18n.t("settings.timeout_label"))
+        self._test_conn_btn.configure(text=i18n.t("settings.test_conn_btn"))
+        self._provider_label.configure(text=i18n.t("settings.provider_label"))
+        self._lang_label.configure(text=i18n.t("settings.lang_label"))
+        self._ui_lang_label.configure(text=i18n.t("settings.ui_lang_label"))
+        self._excel_label.configure(text=i18n.t("settings.excel_section"))
+        self._save_settings_btn.configure(text=i18n.t("settings.save_btn"))
