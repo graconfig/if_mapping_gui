@@ -1,6 +1,7 @@
 # gui/app.py
 import customtkinter as ctk
 import config
+import i18n
 from gui.frames.match_frame import MatchFrame
 from gui.frames.upload_frame import UploadFrame
 from gui.frames.prompts_frame import PromptsFrame
@@ -11,20 +12,22 @@ from api.cap_client import CapClient
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-_NAV_ITEMS = [
-    ("match",   "▶  字段匹配"),
-    ("upload",  "⬆  上传知识库"),
-    ("prompts", "📝  Prompt 管理"),
-    ("logs",    "📊  Token 日志"),
+_NAV_KEYS = [
+    ("match",   "nav.match"),
+    ("upload",  "nav.upload"),
+    ("prompts", "nav.prompts"),
+    ("logs",    "nav.logs"),
 ]
 
 
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("IF Mapping")
-        self.geometry("920x640")
         self.cfg = config.load()
+        i18n.load(self.cfg.get("ui_language", "zh"))
+
+        self.title(i18n.t("app.title"))
+        self.geometry("920x640")
 
         self._build_layout()
         self.show_frame("match")
@@ -36,7 +39,7 @@ class App(ctk.CTk):
         self._statusbar = ctk.CTkFrame(self, height=28, corner_radius=0)
         self._statusbar.pack(side="bottom", fill="x")
         self._statusbar.pack_propagate(False)
-        self._conn_label = ctk.CTkLabel(self._statusbar, text="● 检查中…", font=("", 11))
+        self._conn_label = ctk.CTkLabel(self._statusbar, text=i18n.t("status.checking"), font=("", 11))
         self._conn_label.pack(side="left", padx=12)
         ctk.CTkLabel(self._statusbar, text="v0.1.0", font=("", 10)).pack(side="right", padx=12)
 
@@ -45,21 +48,23 @@ class App(ctk.CTk):
         self._sidebar.pack(side="left", fill="y")
         self._sidebar.pack_propagate(False)
 
-        ctk.CTkLabel(self._sidebar, text="🔗 IF Mapping", font=("", 13, "bold")).pack(
-            pady=(18, 14), padx=10
+        self._app_title_label = ctk.CTkLabel(
+            self._sidebar, text=i18n.t("app.title"), font=("", 13, "bold")
         )
+        self._app_title_label.pack(pady=(18, 14), padx=10)
 
         self._nav_btns: dict[str, ctk.CTkButton] = {}
-        for key, label in _NAV_ITEMS:
+        self._nav_keys = _NAV_KEYS
+        for key, label_key in _NAV_KEYS:
             btn = ctk.CTkButton(
-                self._sidebar, text=label, anchor="w", height=34,
+                self._sidebar, text=i18n.t(label_key), anchor="w", height=34,
                 command=lambda k=key: self.show_frame(k),
             )
             btn.pack(fill="x", padx=8, pady=2)
             self._nav_btns[key] = btn
 
         settings_btn = ctk.CTkButton(
-            self._sidebar, text="⚙  设置", anchor="w", height=34,
+            self._sidebar, text=i18n.t("nav.settings"), anchor="w", height=34,
             command=lambda: self.show_frame("settings"),
         )
         settings_btn.pack(fill="x", padx=8, pady=2, side="bottom")
@@ -84,12 +89,21 @@ class App(ctk.CTk):
         for k, btn in self._nav_btns.items():
             btn.configure(fg_color=("#0f3460", "#0f3460") if k == name else "transparent")
 
+    def retranslate(self) -> None:
+        self.title(i18n.t("app.title"))
+        self._app_title_label.configure(text=i18n.t("app.title"))
+        for key, label_key in self._nav_keys:
+            self._nav_btns[key].configure(text=i18n.t(label_key))
+        self._nav_btns["settings"].configure(text=i18n.t("nav.settings"))
+        for frame in self._frames.values():
+            frame.retranslate()
+
     def update_status(self, connected: bool) -> None:
         url = self.cfg.get("server_url", "")
         if connected:
             self._conn_label.configure(text=f"●  {url}", text_color="#22c55e")
         else:
-            self._conn_label.configure(text="●  未连接", text_color="#ef4444")
+            self._conn_label.configure(text=i18n.t("status.disconnected"), text_color="#ef4444")
 
     def get_client(self) -> CapClient:
         return CapClient(self.cfg.get("server_url", "http://localhost:4004"))
