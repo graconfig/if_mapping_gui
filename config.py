@@ -8,7 +8,7 @@ DEFAULTS: dict = {
     "server_url": "http://localhost:4004",
     "provider": "claude",
     "language": "ja",
-    "ui_language": "zh",
+    "ui_language": "ja",
     "timeout": 600,
     "last_input_dir": "",
 }

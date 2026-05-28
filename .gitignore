@@ -1,2 +1,6 @@
 data/
 docs/
+CLAUDE.md
+.claude/
+__pycache__/
+*.pyc
