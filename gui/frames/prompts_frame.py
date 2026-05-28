@@ -1,6 +1,7 @@
 # gui/frames/prompts_frame.py
 import threading
 import customtkinter as ctk
+import i18n
 from gui.frames import BaseFrame
 
 
@@ -13,7 +14,8 @@ class PromptsFrame(BaseFrame):
         self._build()
 
     def _build(self):
-        ctk.CTkLabel(self, text="Prompt 管理", font=("", 16, "bold")).pack(anchor="w", padx=20, pady=(20, 8))
+        self._title_label = ctk.CTkLabel(self, text=i18n.t("prompts.title"), font=("", 16, "bold"))
+        self._title_label.pack(anchor="w", padx=20, pady=(20, 8))
 
         main = ctk.CTkFrame(self, fg_color="transparent")
         main.pack(fill="both", expand=True, padx=16, pady=(0, 16))
@@ -48,11 +50,14 @@ class PromptsFrame(BaseFrame):
 
         btn_row = ctk.CTkFrame(right, fg_color="transparent")
         btn_row.grid(row=2, column=0, sticky="e", pady=(8, 0))
-        ctk.CTkButton(btn_row, text="取消", width=70, fg_color="#1e293b",
-                      command=self._cancel).pack(side="left", padx=4)
-        ctk.CTkButton(btn_row, text="💾 保存", width=80, command=self._save).pack(side="left", padx=4)
-        ctk.CTkButton(btn_row, text="🔄 重载", width=80, fg_color="#1e293b",
-                      command=self._reload_server).pack(side="left", padx=4)
+        self._cancel_btn = ctk.CTkButton(btn_row, text=i18n.t("prompts.cancel_btn"), width=70,
+                                         fg_color="#1e293b", command=self._cancel)
+        self._cancel_btn.pack(side="left", padx=4)
+        self._save_btn = ctk.CTkButton(btn_row, text=i18n.t("prompts.save_btn"), width=80, command=self._save)
+        self._save_btn.pack(side="left", padx=4)
+        self._reload_btn = ctk.CTkButton(btn_row, text=i18n.t("prompts.reload_btn"), width=80,
+                                         fg_color="#1e293b", command=self._reload_server)
+        self._reload_btn.pack(side="left", padx=4)
 
         # Load prompts on display
         self.bind("<Visibility>", lambda e: self._load_prompts())
@@ -118,3 +123,9 @@ class PromptsFrame(BaseFrame):
             except Exception as e:
                 print(f"reload_prompts error: {e}")
         threading.Thread(target=_reload, daemon=True).start()
+
+    def retranslate(self) -> None:
+        self._title_label.configure(text=i18n.t("prompts.title"))
+        self._cancel_btn.configure(text=i18n.t("prompts.cancel_btn"))
+        self._save_btn.configure(text=i18n.t("prompts.save_btn"))
+        self._reload_btn.configure(text=i18n.t("prompts.reload_btn"))
