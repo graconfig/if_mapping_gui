@@ -8,8 +8,9 @@ from datetime import datetime
 import customtkinter as ctk
 
 import config
+import i18n
 from api.cap_client import CapClient, CapConnectionError
-from excel.reader import read_fields, ExcelReadError
+from excel.reader import read_kb_fields, ExcelReadError
 from gui.frames import BaseFrame
 
 
@@ -19,6 +20,7 @@ def upload_worker(
     server_url: str,
     q: queue.Queue,
     stop: threading.Event,
+    kb_cfg: dict | None = None,
 ) -> None:
     def log(text, level="info"):
         ts = datetime.now().strftime("%H:%M:%S")
@@ -26,29 +28,28 @@ def upload_worker(
 
     client = CapClient(server_url)
     if not client.ping():
-        log(f"无法连接到 {server_url}", "error")
+        log(i18n.t("upload.conn_fail_log", url=server_url), "error")
         q.put({"type": "error"})
         return
 
     path = Path(file_str)
     try:
-        fields, _ = read_fields(path)
-        log(f"解析 {path.name} — {len(fields)} 条记录")
+        records = read_kb_fields(path, kb_cfg=kb_cfg)
+        log(i18n.t("upload.parse_log", name=path.name, count=str(len(records))))
     except ExcelReadError as e:
         log(str(e), "error")
         q.put({"type": "error"})
         return
 
     try:
-        records = [f.to_dict() for f in fields]
         result = client.upload_custom_fields(records, mode=mode)
         inserted = result.get("inserted", 0)
         updated = result.get("updated", 0)
         deleted = result.get("deleted", 0)
-        log(f"上传完成: 插入 {inserted}, 更新 {updated}, 删除 {deleted}")
+        log(i18n.t("upload.done_log", inserted=str(inserted), updated=str(updated), deleted=str(deleted)))
         q.put({"type": "done"})
     except CapConnectionError as e:
-        log(f"上传失败: {e}", "error")
+        log(i18n.t("upload.fail_log", error=str(e)), "error")
         q.put({"type": "error"})
 
 
@@ -63,11 +64,12 @@ class UploadFrame(BaseFrame):
     def _build(self):
         pad = {"padx": 16, "pady": 8}
 
-        ctk.CTkLabel(self, text="上传知识库", font=("", 16, "bold")).pack(anchor="w", padx=20, pady=(20, 4))
+        self._title_label = ctk.CTkLabel(self, text=i18n.t("upload.title"), font=("", 16, "bold"))
+        self._title_label.pack(anchor="w", padx=20, pady=(20, 4))
 
         # Drop zone
         self._drop_btn = ctk.CTkButton(
-            self, text="📂  点击选择知识库 Excel 文件", height=60,
+            self, text=i18n.t("upload.pick_btn"), height=60,
             fg_color="#1e293b", hover_color="#334155", text_color="#64748b",
             command=self._pick_file,
         )
@@ -79,11 +81,12 @@ class UploadFrame(BaseFrame):
         # Mode + upload row
         opts = ctk.CTkFrame(self, fg_color="transparent")
         opts.pack(fill="x", **pad)
-        ctk.CTkLabel(opts, text="上传模式", font=("", 10), text_color="gray").pack(side="left", padx=(0, 6))
+        self._mode_label = ctk.CTkLabel(opts, text=i18n.t("upload.mode_label"), font=("", 10), text_color="gray")
+        self._mode_label.pack(side="left", padx=(0, 6))
         self._mode_var = ctk.StringVar(value="upsert")
         ctk.CTkOptionMenu(opts, variable=self._mode_var,
                           values=["upsert", "overwrite"], width=160).pack(side="left", padx=(0, 12))
-        self._upload_btn = ctk.CTkButton(opts, text="⬆ 上传", width=90, command=self._start)
+        self._upload_btn = ctk.CTkButton(opts, text=i18n.t("upload.upload_btn"), width=90, command=self._start)
         self._upload_btn.pack(side="left")
 
         # Log
@@ -92,7 +95,7 @@ class UploadFrame(BaseFrame):
 
     def _pick_file(self):
         path = filedialog.askopenfilename(
-            title="选择知识库 Excel",
+            title=i18n.t("upload.pick_title"),
             filetypes=[("Excel files", "*.xlsx *.xls")],
             initialdir=self.app.cfg.get("last_input_dir") or None,
         )
@@ -108,7 +111,7 @@ class UploadFrame(BaseFrame):
 
     def _start(self):
         if not self._file:
-            self._log_append("[ERROR] 请先选择文件")
+            self._log_append(i18n.t("upload.no_file_error"))
             return
         self._upload_btn.configure(state="disabled")
         self._stop_event.clear()
@@ -116,7 +119,8 @@ class UploadFrame(BaseFrame):
             target=upload_worker,
             args=(self._file, self._mode_var.get(),
                   self.app.cfg.get("server_url", "http://localhost:4004"),
-                  self._queue, self._stop_event),
+                  self._queue, self._stop_event,
+                  self.app.cfg.get("kb_upload")),
             daemon=True,
         ).start()
         self.after(100, self._poll)
@@ -133,3 +137,9 @@ class UploadFrame(BaseFrame):
         except Exception:
             pass
         self.after(100, self._poll)
+
+    def retranslate(self) -> None:
+        self._title_label.configure(text=i18n.t("upload.title"))
+        self._drop_btn.configure(text=i18n.t("upload.pick_btn"))
+        self._mode_label.configure(text=i18n.t("upload.mode_label"))
+        self._upload_btn.configure(text=i18n.t("upload.upload_btn"))
