@@ -7,8 +7,9 @@ class CapConnectionError(Exception):
 
 
 class CapClient:
-    def __init__(self, server_url: str, timeout: int = 30):
-        self.base = server_url.rstrip("/") + "/if-mapping"
+    def __init__(self, server_url: str, timeout: int = 600):
+        self.root = server_url.rstrip("/")
+        self.base = self.root + "/if-mapping"
         self.timeout = timeout
 
     def ping(self) -> bool:
@@ -18,17 +19,26 @@ class CapClient:
         except requests.RequestException:
             return False
 
-    def match(self, fields: list[dict], provider: str, language: str) -> list[dict]:
+    def match(self, fields: list[dict], provider: str, language: str,
+              correlation_id: str | None = None) -> list[dict]:
+        kwargs: dict = {"json": {"fields": fields, "provider": provider, "language": language},
+                        "timeout": self.timeout}
+        if correlation_id:
+            kwargs["headers"] = {"x-correlation-id": correlation_id}
         try:
-            r = requests.post(
-                f"{self.base}/match",
-                json={"fields": fields, "provider": provider, "language": language},
-                timeout=self.timeout,
-            )
+            r = requests.post(f"{self.base}/match", **kwargs)
             r.raise_for_status()
             return r.json().get("value", [])
         except requests.HTTPError as e:
             raise CapConnectionError(str(e)) from e
+
+    def open_log_stream(self, correlation_id: str) -> requests.Response:
+        return requests.get(
+            f"{self.root}/log-stream",
+            params={"correlationId": correlation_id},
+            stream=True,
+            timeout=(5, 600),
+        )
 
     def upload_custom_fields(self, records: list[dict], mode: str = "upsert") -> dict:
         try:
@@ -43,10 +53,10 @@ class CapClient:
             raise CapConnectionError(str(e)) from e
 
     def get_prompts(self, language: str | None = None) -> list[dict]:
-        params = {}
+        url = f"{self.base}/PromptTemplates"
         if language:
-            params["$filter"] = f"language eq '{language}'"
-        r = requests.get(f"{self.base}/PromptTemplates", params=params, timeout=self.timeout)
+            url += f"?$filter=language eq '{language}'"
+        r = requests.get(url, timeout=self.timeout)
         r.raise_for_status()
         return r.json().get("value", [])
 

@@ -10,7 +10,10 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
-# KB upload aliases (unchanged)
+# KB_FIELDS defines the canonical field order for header-based parsing fallback
+KB_FIELDS = ["ifName", "sourceDesc", "sourceTable", "sourceField",
+             "targetDesc", "targetTable", "targetField", "notes"]
+
 KB_ALIASES: dict[str, str] = {
     "ifname":      "ifName",
     "sourcedesc":  "sourceDesc",
@@ -22,8 +25,17 @@ KB_ALIASES: dict[str, str] = {
     "notes":       "notes",
 }
 
-KB_FIELDS = ["ifName", "sourceDesc", "sourceTable", "sourceField",
-             "targetDesc", "targetTable", "targetField", "notes"]
+# Maps KB_FIELDS canonical names → column keys used in kb_upload config
+_KB_FIELD_TO_COL_KEY: dict[str, str] = {
+    "ifName":      "if_name",
+    "sourceDesc":  "source_desc",
+    "sourceTable": "source_table",
+    "sourceField": "source_field",
+    "targetDesc":  "target_desc",
+    "targetTable": "target_table",
+    "targetField": "target_field",
+    "notes":       "notes",
+}
 
 
 @dataclass
@@ -157,13 +169,86 @@ def read_fields(
     return fields, wb, direction
 
 
-def read_kb_fields(path: Path) -> list[dict]:
-    """Read a knowledge-base Excel (flat header row) → list of CustomFieldUploadInput dicts."""
+def _cell_hex_color(cell) -> str:
+    """Extract hex color (#RRGGBB) from a cell's background fill, or empty string."""
     try:
-        wb = openpyxl.load_workbook(path, read_only=True, data_only=True)
+        fill = cell.fill
+        if fill and fill.fill_type not in (None, "none"):
+            fg = fill.fgColor
+            if fg.type == "rgb":
+                argb = fg.rgb
+                if argb and argb != "00000000":
+                    return "#" + argb[-6:]
+    except Exception:
+        pass
+    return ""
+
+
+def read_kb_fields(path: Path, kb_cfg: dict | None = None) -> list[dict]:
+    """Read a knowledge-base Excel → list of CustomFieldUploadInput dicts.
+
+    Uses kb_cfg (from config["kb_upload"]) for sheet name, start row, and
+    column positions.  Falls back to header-name detection when kb_cfg is None.
+    """
+    try:
+        wb = openpyxl.load_workbook(path, data_only=True)
     except Exception as e:
         raise ExcelReadError(f"{path.name}: cannot open — {e}") from e
 
+    if kb_cfg:
+        # ── config-driven (positional columns) ────────────────────────────
+        sheet_name  = kb_cfg.get("sheet_name")
+        start_row   = int(kb_cfg.get("start_row", 2))
+        skip_value  = kb_cfg.get("skip_value", "")
+        col_cfg     = kb_cfg.get("columns", {})
+        color_key   = kb_cfg.get("color_column", "target_desc")
+        color_idx   = int(col_cfg.get(color_key, 0)) - 1  # 0-based
+
+        if sheet_name and sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+        else:
+            preferred = [s for s in wb.sheetnames if "正本" in s]
+            ws = wb[preferred[0]] if preferred else wb.active
+
+        def _col(key: str):
+            idx = col_cfg.get(key)
+            return int(idx) - 1 if idx is not None else None   # 0-based
+
+        records: list[dict] = []
+        for row_cells in ws.iter_rows(min_row=start_row):
+            row = [c.value for c in row_cells]
+
+            def _v(key: str) -> str:
+                i = _col(key)
+                if i is None or i >= len(row):
+                    return ""
+                v = row[i]
+                return str(v).strip() if v is not None else ""
+
+            source_desc = _v("source_desc")
+            if not source_desc or source_desc in ("", skip_value):
+                continue
+
+            color = ""
+            if 0 <= color_idx < len(row_cells):
+                color = _cell_hex_color(row_cells[color_idx])
+
+            records.append({
+                "ifName":      _v("if_name"),
+                "sourceDesc":  source_desc,
+                "sourceTable": _v("source_table"),
+                "sourceField": _v("source_field"),
+                "targetDesc":  _v("target_desc"),
+                "targetTable": _v("target_table"),
+                "targetField": _v("target_field"),
+                "notes":       _v("notes"),
+                "color":       color,
+            })
+
+        wb.close()
+        return records
+
+    # ── header-detection fallback (original behaviour) ────────────────────
     ws = wb.active
     all_rows = list(ws.iter_rows(values_only=True))
     wb.close()
@@ -182,7 +267,7 @@ def read_kb_fields(path: Path) -> list[dict]:
             f"{path.name}: missing required column 'sourceField' (got: {headers})"
         )
 
-    records: list[dict] = []
+    records = []
     for row in all_rows[1:]:
         idx = col_map["sourceField"]
         sf = row[idx] if idx < len(row) else None
