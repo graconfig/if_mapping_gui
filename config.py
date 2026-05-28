@@ -8,7 +8,26 @@ DEFAULTS: dict = {
     "server_url": "http://localhost:4004",
     "provider": "claude",
     "language": "ja",
+    "ui_language": "zh",
+    "timeout": 600,
     "last_input_dir": "",
+}
+
+KB_UPLOAD_DEFAULTS: dict = {
+    "sheet_name": None,          # None = preferred sheet containing "正本", fallback to active
+    "start_row":  2,             # first data row (1-based)
+    "skip_value": "e",           # skip row when source_desc equals this value
+    "columns": {
+        "if_name":      2,       # column index (1-based) — matches if_gen_tool row[1]
+        "source_desc":  3,       # row[2]
+        "source_table": 4,       # row[3]
+        "source_field": 5,       # row[4]
+        "target_desc":  6,       # row[5] — background color also read from this column
+        "target_table": 7,       # row[6]
+        "target_field": 8,       # row[7]
+        "notes":        9,       # row[8]
+    },
+    "color_column": "target_desc",   # read background color from this column
 }
 
 EXCEL_DEFAULTS: dict = {
@@ -66,12 +85,14 @@ def _deep_merge(base: dict, override: dict) -> dict:
 
 def load() -> dict:
     if not CONFIG_PATH.exists():
-        return {**DEFAULTS, "excel": EXCEL_DEFAULTS}
+        return {**DEFAULTS, "excel": EXCEL_DEFAULTS, "kb_upload": KB_UPLOAD_DEFAULTS}
     with CONFIG_PATH.open(encoding="utf-8") as f:
         data = json.load(f)
-    excel_override = data.pop("excel", {})
+    excel_override    = data.pop("excel",     {})
+    kb_upload_override = data.pop("kb_upload", {})
     merged = {**DEFAULTS, **data}
-    merged["excel"] = _deep_merge(EXCEL_DEFAULTS, excel_override)
+    merged["excel"]     = _deep_merge(EXCEL_DEFAULTS,     excel_override)
+    merged["kb_upload"] = _deep_merge(KB_UPLOAD_DEFAULTS, kb_upload_override)
     return merged
 
 
