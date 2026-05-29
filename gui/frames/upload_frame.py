@@ -21,12 +21,13 @@ def upload_worker(
     q: queue.Queue,
     stop: threading.Event,
     kb_cfg: dict | None = None,
+    xsuaa: dict | None = None,
 ) -> None:
     def log(text, level="info"):
         ts = datetime.now().strftime("%H:%M:%S")
         q.put({"type": "log", "text": f"[{ts}]  {level.upper():<5} {text}", "level": level})
 
-    client = CapClient(server_url)
+    client = CapClient(server_url, xsuaa=xsuaa)
     if not client.ping():
         log(i18n.t("upload.conn_fail_log", url=server_url), "error")
         q.put({"type": "error"})
@@ -120,7 +121,8 @@ class UploadFrame(BaseFrame):
             args=(self._file, self._mode_var.get(),
                   self.app.cfg.get("server_url", "http://localhost:4004"),
                   self._queue, self._stop_event,
-                  self.app.cfg.get("kb_upload")),
+                  self.app.cfg.get("kb_upload"),
+                  self.app.cfg.get("xsuaa")),
             daemon=True,
         ).start()
         self.after(100, self._poll)

@@ -1,4 +1,5 @@
 # api/cap_client.py
+import time
 import requests
 
 
@@ -7,26 +8,61 @@ class CapConnectionError(Exception):
 
 
 class CapClient:
-    def __init__(self, server_url: str, timeout: int = 600):
+    def __init__(self, server_url: str, timeout: int = 600, xsuaa: dict | None = None):
         self.root = server_url.rstrip("/")
         self.base = self.root + "/if-mapping"
         self.timeout = timeout
+        self._xsuaa = xsuaa          # {"url": ..., "clientid": ..., "clientsecret": ...}
+        self._token: str | None = None
+        self._token_expiry: float = 0.0
+
+    # ── Auth ──────────────────────────────────────────────────────────────────
+
+    def _get_token(self) -> str | None:
+        if not self._xsuaa:
+            return None
+        if self._token and time.time() < self._token_expiry - 30:
+            return self._token
+        r = requests.post(
+            self._xsuaa["url"].rstrip("/") + "/oauth/token",
+            data={"grant_type": "client_credentials"},
+            auth=(self._xsuaa["clientid"], self._xsuaa["clientsecret"]),
+            timeout=15,
+        )
+        r.raise_for_status()
+        data = r.json()
+        self._token = data["access_token"]
+        self._token_expiry = time.time() + data.get("expires_in", 3600)
+        return self._token
+
+    def _headers(self, extra: dict | None = None) -> dict:
+        headers: dict = {}
+        token = self._get_token()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        if extra:
+            headers.update(extra)
+        return headers
+
+    # ── API calls ─────────────────────────────────────────────────────────────
 
     def ping(self) -> bool:
         try:
-            r = requests.get(self.base, timeout=5)
+            r = requests.get(self.base, headers=self._headers(), timeout=5)
             return r.status_code < 500
         except requests.RequestException:
             return False
 
     def match(self, fields: list[dict], provider: str, language: str,
               correlation_id: str | None = None) -> list[dict]:
-        kwargs: dict = {"json": {"fields": fields, "provider": provider, "language": language},
-                        "timeout": self.timeout}
-        if correlation_id:
-            kwargs["headers"] = {"x-correlation-id": correlation_id}
+        extra = {"x-correlation-id": correlation_id} if correlation_id else None
         try:
-            r = requests.post(f"{self.base}/match", **kwargs)
+            r = requests.post(
+                f"{self.base}/match",
+                json={"fields": fields, "provider": provider, "language": language},
+                headers=self._headers(extra),
+                timeout=self.timeout,
+            )
             r.raise_for_status()
             return r.json().get("value", [])
         except requests.HTTPError as e:
@@ -36,6 +72,7 @@ class CapClient:
         return requests.get(
             f"{self.root}/log-stream",
             params={"correlationId": correlation_id},
+            headers=self._headers(),
             stream=True,
             timeout=(5, 600),
         )
@@ -45,6 +82,7 @@ class CapClient:
             r = requests.post(
                 f"{self.base}/uploadCustomFields",
                 json={"records": records, "mode": mode},
+                headers=self._headers(),
                 timeout=self.timeout,
             )
             r.raise_for_status()
@@ -56,7 +94,7 @@ class CapClient:
         url = f"{self.base}/PromptTemplates"
         if language:
             url += f"?$filter=language eq '{language}'"
-        r = requests.get(url, timeout=self.timeout)
+        r = requests.get(url, headers=self._headers(), timeout=self.timeout)
         r.raise_for_status()
         return r.json().get("value", [])
 
@@ -64,16 +102,25 @@ class CapClient:
         r = requests.patch(
             f"{self.base}/PromptTemplates('{prompt_id}')",
             json={"content": content},
+            headers=self._headers(),
             timeout=self.timeout,
         )
         r.raise_for_status()
         return r.json()
 
     def reload_prompts(self) -> None:
-        r = requests.post(f"{self.base}/reloadPrompts", timeout=self.timeout)
+        r = requests.post(
+            f"{self.base}/reloadPrompts",
+            headers=self._headers(),
+            timeout=self.timeout,
+        )
         r.raise_for_status()
 
     def get_token_logs(self) -> list[dict]:
-        r = requests.get(f"{self.base}/TokenLogs", timeout=self.timeout)
+        r = requests.get(
+            f"{self.base}/TokenLogs",
+            headers=self._headers(),
+            timeout=self.timeout,
+        )
         r.raise_for_status()
         return r.json().get("value", [])

@@ -106,7 +106,10 @@ class App(ctk.CTk):
             self._conn_label.configure(text=i18n.t("status.disconnected"), text_color="#ef4444")
 
     def get_client(self) -> CapClient:
-        return CapClient(self.cfg.get("server_url", "http://localhost:4004"))
+        return CapClient(
+            self.cfg.get("server_url", "http://localhost:4004"),
+            xsuaa=self.cfg.get("xsuaa"),
+        )
 
     def _refresh_status(self) -> None:
         import threading

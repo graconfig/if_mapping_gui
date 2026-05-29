@@ -65,6 +65,7 @@ def match_worker(
     excel_cfg: dict,
     q: queue.Queue,
     stop: threading.Event,
+    xsuaa: dict | None = None,
 ) -> None:
     """Background worker: runs matching pipeline and puts messages on q."""
 
@@ -72,7 +73,7 @@ def match_worker(
         ts = datetime.now().strftime("%H:%M:%S")
         q.put({"type": "log", "text": f"[{ts}]  {level.upper():<5} {text}", "level": level})
 
-    client = CapClient(server_url, timeout=timeout)
+    client = CapClient(server_url, timeout=timeout, xsuaa=xsuaa)
     if not client.ping():
         log(i18n.t("match.conn_fail_log", url=server_url), "error")
         q.put({"type": "error", "msg": "CAP service unreachable"})
@@ -251,7 +252,8 @@ class MatchFrame(BaseFrame):
             args=(list(self._files), self._provider_var.get(), self._lang_var.get(),
                   self.app.cfg.get("server_url", "http://localhost:4004"),
                   self.app.cfg.get("timeout", 600),
-                  excel_cfg, self._queue, self._stop_event),
+                  excel_cfg, self._queue, self._stop_event,
+                  self.app.cfg.get("xsuaa")),
             daemon=True,
         )
         thr.start()

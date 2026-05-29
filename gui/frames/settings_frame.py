@@ -154,7 +154,7 @@ class SettingsFrame(BaseFrame):
 
         def _check():
             from api.cap_client import CapClient
-            ok = CapClient(url).ping()
+            ok = CapClient(url, xsuaa=self.app.cfg.get("xsuaa")).ping()
             self.after(0, lambda: self._conn_status.configure(
                 text=i18n.t("settings.connected") if ok else i18n.t("settings.disconnected"),
                 text_color="#22c55e" if ok else "#ef4444",

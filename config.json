@@ -1,9 +1,16 @@
 {
-  "server_url": "http://localhost:4004",
+  "server_url": "https://pwc-consulting-llc-genai-japan-aws-7ht03ppo-clc-if-mapp2ede2278.cfapps.jp10.hana.ondemand.com",
+  "xsuaa": {
+    "url": "https://genai-japan-aws-7ht03ppo.authentication.jp10.hana.ondemand.com",
+    "clientid": "sb-if-mapping-cap-CLC!t26501",
+    "clientsecret": "7ba1e4c7-30d6-48c0-b116-6299ef5c2816$hAuuzqrc6cItP_YjN4hm6KUgDh9UUKoMLERbCuPfZK0="
+  },
   "provider": "claude",
   "language": "ja",
+  "ui_language": "ja",
   "timeout": 600,
   "last_input_dir": "D:\\Users\\PC\\Projects\\if_mapping_gui\\data",
+
   "excel": {
     "sheet_head": "対象IF",
     "sheet_data": "IFマッピング定義",
@@ -92,5 +99,21 @@
         }
       }
     }
+  },
+  "kb_upload": {
+    "sheet_name": null,
+    "start_row": 2,
+    "skip_value": "e",
+    "columns": {
+      "if_name": 2,
+      "source_desc": 3,
+      "source_table": 4,
+      "source_field": 5,
+      "target_desc": 6,
+      "target_table": 7,
+      "target_field": 8,
+      "notes": 9
+    },
+    "color_column": "target_desc"
   }
 }
