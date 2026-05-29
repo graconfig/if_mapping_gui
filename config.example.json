@@ -1,5 +1,10 @@
 {
-  "server_url": "http://localhost:4004",
+  "server_url": "http://pwc-consulting-llc-genai-japan-aws-7ht03ppo-clc-if-mapp2ede2278.cfapps.jp10.hana.ondemand.com",
+  "xsuaa": {
+    "url": "https://genai-japan-aws-7ht03ppo.authentication.jp10.hana.ondemand.com",
+    "clientid": "sb-if-mapping-cap-CLC!t26501",
+    "clientsecret": "7ba1e4c7-30d6-48c0-b116-6299ef5c2816$hAuuzqrc6cItP_YjN4hm6KUgDh9UUKoMLERbCuPfZK0="
+  },
   "provider": "claude",
   "language": "ja",
   "last_input_dir": "",
