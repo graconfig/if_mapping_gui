@@ -1,5 +1,5 @@
 {
-  "server_url": "http://pwc-consulting-llc-genai-japan-aws-7ht03ppo-clc-if-mapp2ede2278.cfapps.jp10.hana.ondemand.com",
+  "server_url": "https://pwc-consulting-llc-genai-japan-aws-7ht03ppo-clc-if-mapp2ede2278.cfapps.jp10.hana.ondemand.com",
   "xsuaa": {
     "url": "https://genai-japan-aws-7ht03ppo.authentication.jp10.hana.ondemand.com",
     "clientid": "sb-if-mapping-cap-CLC!t26501",
