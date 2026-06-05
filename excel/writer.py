@@ -43,6 +43,7 @@ def write_results(
     output_cols: dict[str, str],
     sheet_data: str = "IFマッピング定義",
     input_row_cols: dict[str, str] | None = None,
+    output_dir: Path | None = None,
 ) -> Path:
     """Write match results into workbook's data sheet, save as processed_*.xlsx.
 
@@ -83,6 +84,7 @@ def write_results(
                     ws[f"{col}{row_idx}"].fill = fill
 
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out_path = input_path.parent / f"processed_{ts}_{input_path.name}"
+    dest = output_dir if output_dir is not None else input_path.parent
+    out_path = dest / f"processed_{ts}_{input_path.name}"
     workbook.save(out_path)
     return out_path

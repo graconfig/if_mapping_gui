@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 CONFIG_PATH = Path(__file__).parent / "config.json"
+PROJECT_ROOT = Path(__file__).parent
 
 DEFAULTS: dict = {
     "server_url": "http://localhost:4004",
@@ -11,6 +12,7 @@ DEFAULTS: dict = {
     "ui_language": "ja",
     "timeout": 600,
     "last_input_dir": "",
+    "last_output_dir": "",
 }
 
 KB_UPLOAD_DEFAULTS: dict = {
