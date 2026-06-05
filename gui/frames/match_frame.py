@@ -461,6 +461,8 @@ class MatchFrame(BaseFrame):
             sheet_data = excel_cfg.get("sheet_data", "IFマッピング定義")
             out = write_results(Path(file_str), workbook, file_results, output_cols,
                                 sheet_data, input_row_cols, out_dir)
+            workbook.close()
+            self._wb[file_str] = None  # type: ignore[assignment]
             self._log_append(i18n.t("match.export_done_log", name=out.name), "info")
             if delete_inputs:
                 src = Path(file_str)
