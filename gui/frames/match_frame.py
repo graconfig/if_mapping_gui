@@ -190,7 +190,10 @@ class MatchFrame(BaseFrame):
         self._input_dir_label.pack(side="left")
         self._input_dir_btn = ctk.CTkButton(in_row, text="📂", width=32, height=26,
                                             command=self._pick_input_dir)
-        self._input_dir_btn.pack(side="left", padx=(0, 6))
+        self._input_dir_btn.pack(side="left", padx=(0, 4))
+        self._input_open_btn = ctk.CTkButton(in_row, text="🔍", width=32, height=26,
+                                             command=self._open_input_dir)
+        self._input_open_btn.pack(side="left", padx=(0, 6))
         self._input_dir_display = ctk.CTkLabel(in_row, text=self._get_default_input_display(),
                                                font=("Consolas", 10), text_color="#94a3b8", anchor="w")
         self._input_dir_display.pack(side="left", fill="x", expand=True)
@@ -203,7 +206,10 @@ class MatchFrame(BaseFrame):
         self._output_dir_label.pack(side="left")
         self._output_dir_btn = ctk.CTkButton(out_row, text="📂", width=32, height=26,
                                              command=self._pick_output_dir)
-        self._output_dir_btn.pack(side="left", padx=(0, 6))
+        self._output_dir_btn.pack(side="left", padx=(0, 4))
+        self._output_open_btn = ctk.CTkButton(out_row, text="🔍", width=32, height=26,
+                                              command=self._open_output_dir)
+        self._output_open_btn.pack(side="left", padx=(0, 6))
         self._output_dir_display = ctk.CTkLabel(out_row, text=self._get_default_output_display(),
                                                 font=("Consolas", 10), text_color="#94a3b8", anchor="w")
         self._output_dir_display.pack(side="left", fill="x", expand=True)
@@ -307,6 +313,28 @@ class MatchFrame(BaseFrame):
             self.app.cfg["last_output_dir"] = d
             config.save(self.app.cfg)
             self._output_dir_display.configure(text=str(Path(d)))
+
+    def _open_input_dir(self):
+        d = self._input_dir or self._get_default_input_dir()
+        if d and Path(d).is_dir():
+            import subprocess, sys
+            if sys.platform == "win32":
+                subprocess.Popen(["explorer", str(Path(d))])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", d])
+            else:
+                subprocess.Popen(["xdg-open", d])
+
+    def _open_output_dir(self):
+        d = self._last_output_dir or self._output_dir or self._get_default_output_dir()
+        if d and Path(d).is_dir():
+            import subprocess, sys
+            if sys.platform == "win32":
+                subprocess.Popen(["explorer", str(Path(d))])
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", d])
+            else:
+                subprocess.Popen(["xdg-open", d])
 
     # ── Controls ──────────────────────────────────────────────────────────────
 
