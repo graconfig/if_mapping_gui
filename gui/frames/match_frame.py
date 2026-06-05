@@ -30,7 +30,8 @@ def _scan_excel(folder: Path) -> list[Path]:
 
 
 def _sse_worker(client: CapClient, correlation_id: str, q: queue.Queue,
-                stop: threading.Event, file_label: str = "") -> None:
+                stop: threading.Event, file_label: str = "",
+                on_log: "callable | None" = None) -> None:
     """Read CAP log stream (SSE) and forward entries to the main queue."""
     prefix = f"[{file_label}] " if file_label else ""
     try:
@@ -58,11 +59,15 @@ def _sse_worker(client: CapClient, correlation_id: str, q: queue.Queue,
                         f"{k}={v}" for k, v in ctx.items()
                         if k != "correlationId" and v is not None
                     )
-                    q.put({
-                        "type":  "log",
-                        "text":  f"[{ts}] {level.upper():<5} {prefix}{msg}{extra if extra.strip() else ''}",
-                        "level": level,
-                    })
+                    text = f"{prefix}{msg}{extra if extra.strip() else ''}"
+                    if on_log:
+                        on_log(text, level)
+                    else:
+                        q.put({
+                            "type":  "log",
+                            "text":  f"[{ts}] {level.upper():<5} {text}",
+                            "level": level,
+                        })
     except Exception:
         pass
 
@@ -81,14 +86,26 @@ def match_worker(
 ) -> None:
     """Background worker: scans input_dir for Excel files, runs matching, writes to output_dir."""
 
-    def log(text, level="info"):
-        ts = datetime.now().strftime("%H:%M:%S")
+    logs_dir = config.PROJECT_ROOT / "logs"
+    logs_dir.mkdir(exist_ok=True)
+    log_file_path = logs_dir / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    _log_file = log_file_path.open("w", encoding="utf-8")
+
+    def _emit(text: str, level: str) -> None:
+        ts_full = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        line = f"[{ts_full}]  {level.upper():<5} {text}\n"
+        _log_file.write(line)
+        _log_file.flush()
+        ts = ts_full[11:]  # HH:MM:SS for UI
         q.put({"type": "log", "text": f"[{ts}]  {level.upper():<5} {text}", "level": level})
 
+    def log(text, level="info"):
+        _emit(text, level)
 
     client = CapClient(server_url, timeout=timeout, xsuaa=xsuaa)
     if not client.ping():
         log(i18n.t("match.conn_fail_log", url=server_url), "error")
+        _log_file.close()
         q.put({"type": "error", "msg": "CAP service unreachable"})
         return
 
@@ -98,6 +115,7 @@ def match_worker(
 
     if not files:
         log(i18n.t("match.no_excel_in_dir"), "error")
+        _log_file.close()
         q.put({"type": "error", "msg": "no Excel files"})
         return
 
@@ -117,8 +135,7 @@ def match_worker(
         label = file_path.name
 
         def log_f(text, level="info", _label=label):
-            ts = datetime.now().strftime("%H:%M:%S")
-            q.put({"type": "log", "text": f"[{ts}]  {level.upper():<5} [{_label}] {text}", "level": level})
+            _emit(f"[{_label}] {text}", level)
 
         try:
             fields, workbook, direction = read_fields(file_path, excel_cfg)
@@ -135,7 +152,7 @@ def match_worker(
         sse_stop = threading.Event()
         sse_thread = threading.Thread(
             target=_sse_worker,
-            args=(client, correlation_id, q, sse_stop, label),
+            args=(client, correlation_id, q, sse_stop, label, _emit),
             daemon=True,
         )
         sse_thread.start()
@@ -159,6 +176,7 @@ def match_worker(
 
         q.put({"type": "progress", "pct": (idx + 1) / len(files)})
 
+    _log_file.close()
     q.put({
         "type": "done",
         "results": all_results,
@@ -167,6 +185,7 @@ def match_worker(
         "directions": all_directions,
         "files": file_strs,
         "output_dir": str(out_path),
+        "log_file": str(log_file_path),
     })
 
 
