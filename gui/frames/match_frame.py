@@ -29,8 +29,10 @@ def _scan_excel(folder: Path) -> list[Path]:
     return sorted(files)
 
 
-def _sse_worker(client: CapClient, correlation_id: str, q: queue.Queue, stop: threading.Event) -> None:
+def _sse_worker(client: CapClient, correlation_id: str, q: queue.Queue,
+                stop: threading.Event, file_label: str = "") -> None:
     """Read CAP log stream (SSE) and forward entries to the main queue."""
+    prefix = f"[{file_label}] " if file_label else ""
     try:
         r = client.open_log_stream(correlation_id)
         r.raise_for_status()
@@ -58,7 +60,7 @@ def _sse_worker(client: CapClient, correlation_id: str, q: queue.Queue, stop: th
                     )
                     q.put({
                         "type":  "log",
-                        "text":  f"[{ts}] {level.upper():<5} {msg}{extra if extra.strip() else ''}",
+                        "text":  f"[{ts}] {level.upper():<5} {prefix}{msg}{extra if extra.strip() else ''}",
                         "level": level,
                     })
     except Exception:
@@ -83,6 +85,7 @@ def match_worker(
         ts = datetime.now().strftime("%H:%M:%S")
         q.put({"type": "log", "text": f"[{ts}]  {level.upper():<5} {text}", "level": level})
 
+
     client = CapClient(server_url, timeout=timeout, xsuaa=xsuaa)
     if not client.ping():
         log(i18n.t("match.conn_fail_log", url=server_url), "error")
@@ -100,65 +103,71 @@ def match_worker(
 
     log(i18n.t("match.scan_log", dir=in_path.name, count=str(len(files))))
 
-    # Start SSE log stream for this run
-    correlation_id = uuid.uuid4().hex[:12]
-    sse_stop = threading.Event()
-    sse_thread = threading.Thread(
-        target=_sse_worker,
-        args=(client, correlation_id, q, sse_stop),
-        daemon=True,
-    )
-    sse_thread.start()
-
     all_results: list[dict] = []
     all_wb: dict[str, openpyxl.Workbook] = {}
     all_row_indices: dict[str, set[int]] = {}
     all_directions: dict[str, str] = {}
     file_strs = [str(f) for f in files]
 
-    try:
-        for idx, file_path in enumerate(files):
-            if stop.is_set():
-                log(i18n.t("match.user_stop_log"), "warn")
-                break
+    for idx, file_path in enumerate(files):
+        if stop.is_set():
+            log(i18n.t("match.user_stop_log"), "warn")
+            break
 
-            try:
-                fields, workbook, direction = read_fields(file_path, excel_cfg)
-                all_wb[str(file_path)] = workbook
-                all_row_indices[str(file_path)] = {f.rowIndex for f in fields}
-                all_directions[str(file_path)] = direction
-                log(i18n.t("match.parse_log", name=file_path.name, count=str(len(fields)), direction=direction))
-            except ExcelReadError as e:
-                log(str(e), "error")
-                continue
+        label = file_path.name
 
-            try:
-                results = client.match(
-                    [f.to_dict() for f in fields],
-                    provider=provider,
-                    language=language,
-                    correlation_id=correlation_id,
-                )
-                all_results.extend(results)
-                custom = sum(1 for r in results if r.get("matchSource") in ("exact", "vector"))
-                ai     = sum(1 for r in results if r.get("matchSource") == "ai")
-                log(i18n.t("match.match_done_log", total=str(len(results)), custom=str(custom), ai=str(ai)), "step")
-            except Exception as e:
-                log(i18n.t("match.match_fail_log", name=file_path.name, error=str(e)), "error")
+        def log_f(text, level="info", _label=label):
+            ts = datetime.now().strftime("%H:%M:%S")
+            q.put({"type": "log", "text": f"[{ts}]  {level.upper():<5} [{_label}] {text}", "level": level})
 
-            q.put({"type": "progress", "pct": (idx + 1) / len(files)})
+        try:
+            fields, workbook, direction = read_fields(file_path, excel_cfg)
+            all_wb[str(file_path)] = workbook
+            all_row_indices[str(file_path)] = {f.rowIndex for f in fields}
+            all_directions[str(file_path)] = direction
+            log_f(i18n.t("match.parse_log", name=file_path.name, count=str(len(fields)), direction=direction))
+        except ExcelReadError as e:
+            log_f(str(e), "error")
+            continue
 
-        q.put({
-            "type": "done",
-            "results": all_results,
-            "wb": all_wb,
-            "row_indices": all_row_indices,
-            "directions": all_directions,
-            "files": file_strs,
-            "output_dir": str(out_path),
-        })
-    finally:
-        sse_stop.set()
+        # Per-file correlation_id and SSE stream
+        correlation_id = uuid.uuid4().hex[:12]
+        sse_stop = threading.Event()
+        sse_thread = threading.Thread(
+            target=_sse_worker,
+            args=(client, correlation_id, q, sse_stop, label),
+            daemon=True,
+        )
+        sse_thread.start()
+
+        try:
+            results = client.match(
+                [f.to_dict() for f in fields],
+                provider=provider,
+                language=language,
+                correlation_id=correlation_id,
+            )
+            all_results.extend(results)
+            custom = sum(1 for r in results if r.get("matchSource") in ("exact", "vector"))
+            ai     = sum(1 for r in results if r.get("matchSource") == "ai")
+            log_f(i18n.t("match.match_done_log", total=str(len(results)), custom=str(custom), ai=str(ai)), "step")
+        except Exception as e:
+            log_f(i18n.t("match.match_fail_log", name=file_path.name, error=str(e)), "error")
+        finally:
+            sse_stop.set()
+            sse_thread.join(timeout=3)
+
+        q.put({"type": "progress", "pct": (idx + 1) / len(files)})
+
+    q.put({
+        "type": "done",
+        "results": all_results,
+        "wb": all_wb,
+        "row_indices": all_row_indices,
+        "directions": all_directions,
+        "files": file_strs,
+        "output_dir": str(out_path),
+    })
 
 
 class MatchFrame(BaseFrame):
