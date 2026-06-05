@@ -27,6 +27,7 @@
   "match.conn_fail_log": "{url} に接続できません — CAP が起動しているか確認してください",
   "match.result_summary": "完了: {total} 件 ｜ KB {custom} ｜ AI {ai}",
   "match.export_done_log": "エクスポート完了: {name}",
+  "match.delete_input_log": "入力ファイルを削除しました: {name}",
   "upload.title": "ナレッジベースアップロード",
   "upload.pick_btn": "📂  ナレッジベース Excel を選択",
   "upload.mode_label": "アップロードモード",

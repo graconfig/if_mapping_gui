@@ -383,12 +383,13 @@ class MatchFrame(BaseFrame):
         self._stop_btn.configure(state="disabled")
         if self._results:
             self._export_btn.configure(state="normal")
+            self._export(delete_inputs=True)
 
     def _on_error(self):
         self._start_btn.configure(state="normal")
         self._stop_btn.configure(state="disabled")
 
-    def _export(self):
+    def _export(self, delete_inputs: bool = False):
         excel_cfg = self.app.cfg.get("excel", config.EXCEL_DEFAULTS)
         out_dir = Path(self._last_output_dir) if self._last_output_dir else Path(self._output_dir)
         for file_str in list(self._wb.keys()):
@@ -405,6 +406,13 @@ class MatchFrame(BaseFrame):
             out = write_results(Path(file_str), workbook, file_results, output_cols,
                                 sheet_data, input_row_cols, out_dir)
             self._log_append(i18n.t("match.export_done_log", name=out.name), "info")
+            if delete_inputs:
+                src = Path(file_str)
+                try:
+                    src.unlink()
+                    self._log_append(i18n.t("match.delete_input_log", name=src.name), "info")
+                except Exception as e:
+                    self._log_append(f"[WARN] 删除失败 {src.name}: {e}", "warn")
 
     def retranslate(self) -> None:
         self._input_dir_label.configure(text=i18n.t("match.input_dir_label"))

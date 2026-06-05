@@ -27,6 +27,7 @@
   "match.conn_fail_log": "无法连接到 {url} — 请检查 CAP 是否已启动",
   "match.result_summary": "完成: {total} 条 ｜ 知识库 {custom} ｜ AI {ai}",
   "match.export_done_log": "已导出: {name}",
+  "match.delete_input_log": "已删除输入文件: {name}",
   "upload.title": "上传知识库",
   "upload.pick_btn": "📂  点击选择知识库 Excel 文件",
   "upload.mode_label": "上传模式",
