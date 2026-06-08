@@ -2,9 +2,10 @@
   "server_url": "https://pwc-consulting-llc-genai-japan-aws-7ht03ppo-clc-if-mapp2ede2278.cfapps.jp10.hana.ondemand.com",
   "provider": "claude",
   "language": "ja",
-  "ui_language": "ja",
+  "ui_language": "zh",
   "timeout": 600,
-  "last_input_dir": "D:\\Users\\PC\\Projects\\if_mapping_gui\\data",
+  "last_input_dir": "D:/Users/PC/Projects/if_mapping_gui/input",
+  "last_output_dir": "D:/Users/PC/Projects/if_mapping_gui/output",
   "xsuaa": {
     "url": "https://genai-japan-aws-7ht03ppo.authentication.jp10.hana.ondemand.com",
     "clientid": "sb-if-mapping-cap-CLC!t26501",

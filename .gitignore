@@ -1,7 +1,10 @@
-data/
 docs/
 CLAUDE.md
 .claude/
 __pycache__/
 *.pyc
 mta_archives/   
+data/
+input/
+output/
+logs/
