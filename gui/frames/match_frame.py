@@ -13,7 +13,7 @@ import customtkinter as ctk
 import config
 import i18n
 from api.cap_client import CapClient
-from excel.reader import read_fields, ExcelReadError
+from excel.reader import read_fields, build_sheet_previews, ExcelReadError
 from excel.writer import write_results
 from gui.frames import BaseFrame
 
@@ -138,7 +138,33 @@ def match_worker(
             _emit(f"[{_label}] {text}", level)
 
         try:
-            fields, workbook, direction = read_fields(file_path, excel_cfg)
+            # Phase 1: AI structure detection
+            log_f("Analyzing structure...")
+            try:
+                sheet_previews = build_sheet_previews(file_path)
+                excel_cfg_file = client.analyze_excel_structure(
+                    sheet_previews, provider, language
+                )
+                detected_direction = excel_cfg_file.get("direction", "normal")
+                excel_cfg_resolved = {
+                    "sheet_head": excel_cfg_file.get("sheet_head", excel_cfg["sheet_head"]),
+                    "sheet_data": excel_cfg_file.get("sheet_data", excel_cfg["sheet_data"]),
+                    "header_row": excel_cfg_file.get("header_row", excel_cfg["header_row"]),
+                    "start_row":  excel_cfg_file.get("start_row",  excel_cfg["start_row"]),
+                    "detection":  excel_cfg["detection"],
+                    "directions": {
+                        detected_direction: {
+                            "input_header_cols": excel_cfg_file.get("header_cols", {}),
+                            "input_row_cols":    excel_cfg_file.get("row_cols", {}),
+                        }
+                    },
+                }
+            except Exception as ai_err:
+                log_f(f"AI structure analysis failed ({ai_err}), falling back to config", "warn")
+                excel_cfg_resolved = excel_cfg
+
+            # Phase 2: field extraction
+            fields, workbook, direction = read_fields(file_path, excel_cfg_resolved)
             all_wb[str(file_path)] = workbook
             all_row_indices[str(file_path)] = {f.rowIndex for f in fields}
             all_directions[str(file_path)] = direction
