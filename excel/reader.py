@@ -27,23 +27,25 @@ def build_sheet_previews(path: Path) -> list[dict]:
         raise ExcelReadError(f"{path.name}: cannot open for preview — {e}") from e
 
     previews: list[dict] = []
-    for sheet_name in wb.sheetnames:
-        ws = wb[sheet_name]
-        lines: list[str] = []
-        for row in ws.iter_rows(max_row=PREVIEW_ROWS, values_only=False):
-            cells = []
-            for cell in row:
-                if cell.value is not None:
-                    col_letter = get_column_letter(cell.column)
-                    cells.append(f"[{col_letter}]{cell.value}")
-            if cells:
-                lines.append(" ".join(cells))
-        if lines:
-            previews.append({
-                "sheetName":   sheet_name,
-                "previewText": "\n".join(lines),
-            })
-    wb.close()
+    try:
+        for sheet_name in wb.sheetnames:
+            ws = wb[sheet_name]
+            lines: list[str] = []
+            for row in ws.iter_rows(max_row=PREVIEW_ROWS, values_only=False):
+                cells = []
+                for cell in row:
+                    if cell.value is not None:
+                        col_letter = get_column_letter(cell.column)
+                        cells.append(f"[{col_letter}]{cell.value}")
+                if cells:
+                    lines.append(" ".join(cells))
+            if lines:
+                previews.append({
+                    "sheetName":   sheet_name,
+                    "previewText": "\n".join(lines),
+                })
+    finally:
+        wb.close()
     return previews
 
 
