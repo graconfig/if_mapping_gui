@@ -90,6 +90,29 @@ class CapClient:
         except requests.HTTPError as e:
             raise CapConnectionError(str(e)) from e
 
+    def analyze_excel_structure(
+        self,
+        sheet_previews: list[dict],
+        provider: str,
+        language: str,
+    ) -> dict:
+        """Call analyzeExcelStructure action and return ExcelStructure dict."""
+        try:
+            r = requests.post(
+                f"{self.base}/analyzeExcelStructure",
+                json={
+                    "sheetPreviews": sheet_previews,
+                    "provider":      provider,
+                    "language":      language,
+                },
+                headers=self._headers(),
+                timeout=self.timeout,
+            )
+            r.raise_for_status()
+            return r.json()
+        except requests.HTTPError as e:
+            raise CapConnectionError(str(e)) from e
+
     def get_prompts(self, language: str | None = None) -> list[dict]:
         url = f"{self.base}/PromptTemplates"
         if language:
