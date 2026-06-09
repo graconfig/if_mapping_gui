@@ -146,17 +146,30 @@ def match_worker(
                     sheet_previews, provider, language
                 )
                 detected_direction = excel_cfg_file.get("direction", "normal")
+                ai_header_cols = excel_cfg_file.get("header_cols") or {}
+                ai_row_cols    = excel_cfg_file.get("row_cols") or {}
+
+                # Build a directions dict containing both keys so read_fields never gets a KeyError
+                # regardless of which direction its cell-detection picks.
+                # The AI-detected direction gets AI columns; the other direction keeps config columns.
+                fallback_dir_cfg = excel_cfg["directions"].get(
+                    detected_direction,
+                    excel_cfg["directions"]["normal"]
+                )
+                ai_dir_entry = {
+                    "input_header_cols": ai_header_cols or fallback_dir_cfg["input_header_cols"],
+                    "input_row_cols":    ai_row_cols    or fallback_dir_cfg["input_row_cols"],
+                }
+                other_direction = "sap" if detected_direction == "normal" else "normal"
                 excel_cfg_resolved = {
-                    "sheet_head": excel_cfg_file.get("sheet_head", excel_cfg["sheet_head"]),
-                    "sheet_data": excel_cfg_file.get("sheet_data", excel_cfg["sheet_data"]),
-                    "header_row": excel_cfg_file.get("header_row", excel_cfg["header_row"]),
-                    "start_row":  excel_cfg_file.get("start_row",  excel_cfg["start_row"]),
+                    "sheet_head": excel_cfg_file.get("sheet_head") or excel_cfg["sheet_head"],
+                    "sheet_data": excel_cfg_file.get("sheet_data") or excel_cfg["sheet_data"],
+                    "header_row": excel_cfg_file.get("header_row") or excel_cfg["header_row"],
+                    "start_row":  excel_cfg_file.get("start_row")  or excel_cfg["start_row"],
                     "detection":  excel_cfg["detection"],
                     "directions": {
-                        detected_direction: {
-                            "input_header_cols": excel_cfg_file.get("header_cols", {}),
-                            "input_row_cols":    excel_cfg_file.get("row_cols", {}),
-                        }
+                        detected_direction: ai_dir_entry,
+                        other_direction:    excel_cfg["directions"].get(other_direction, ai_dir_entry),
                     },
                 }
             except Exception as ai_err:
