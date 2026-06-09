@@ -3,12 +3,49 @@ import warnings
 import openpyxl
 from pathlib import Path
 from dataclasses import dataclass
+from openpyxl.utils import get_column_letter
 
 warnings.filterwarnings(
     "ignore",
     message="DrawingML support is incomplete.*",
     category=UserWarning,
 )
+
+PREVIEW_ROWS = 15
+
+
+def build_sheet_previews(path: Path) -> list[dict]:
+    """Return [{sheetName, previewText}] for all non-empty sheets.
+
+    previewText: first PREVIEW_ROWS rows, each cell as [ColLetter]value,
+    cells separated by spaces, rows separated by newlines.
+    Empty sheets (all preview rows are None) are skipped.
+    """
+    try:
+        wb = openpyxl.load_workbook(path, data_only=True, read_only=True)
+    except Exception as e:
+        raise ExcelReadError(f"{path.name}: cannot open for preview — {e}") from e
+
+    previews: list[dict] = []
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        lines: list[str] = []
+        for row in ws.iter_rows(max_row=PREVIEW_ROWS, values_only=False):
+            cells = []
+            for cell in row:
+                if cell.value is not None:
+                    col_letter = get_column_letter(cell.column)
+                    cells.append(f"[{col_letter}]{cell.value}")
+            if cells:
+                lines.append(" ".join(cells))
+        if lines:
+            previews.append({
+                "sheetName":   sheet_name,
+                "previewText": "\n".join(lines),
+            })
+    wb.close()
+    return previews
+
 
 # KB_FIELDS defines the canonical field order for header-based parsing fallback
 KB_FIELDS = ["ifName", "sourceDesc", "sourceTable", "sourceField",
