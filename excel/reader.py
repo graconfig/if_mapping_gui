@@ -14,10 +14,10 @@ warnings.filterwarnings(
 PREVIEW_ROWS = 15
 
 
-def build_sheet_previews(path: Path) -> list[dict]:
+def build_sheet_previews(path: Path, preview_rows: int = PREVIEW_ROWS) -> list[dict]:
     """Return [{sheetName, previewText}] for all non-empty sheets.
 
-    previewText: first PREVIEW_ROWS rows, each prefixed with its 1-based row number
+    previewText: first preview_rows rows, each prefixed with its 1-based row number
     so the AI can return exact row numbers.  Format per line:
         row{N}: [ColLetter]value [ColLetter]value ...
     Empty sheets (all preview rows are None) are skipped.
@@ -33,7 +33,7 @@ def build_sheet_previews(path: Path) -> list[dict]:
             ws = wb[sheet_name]
             lines: list[str] = []
             for row_idx, row in enumerate(
-                ws.iter_rows(max_row=PREVIEW_ROWS, values_only=False), start=1
+                ws.iter_rows(max_row=preview_rows, values_only=False), start=1
             ):
                 cells = []
                 for cell in row:

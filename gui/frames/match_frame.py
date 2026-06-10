@@ -84,6 +84,7 @@ def match_worker(
     q: queue.Queue,
     stop: threading.Event,
     xsuaa: dict | None = None,
+    ai_preview_rows: int = 15,
 ) -> None:
     """Background worker: scans input_dir for Excel files, runs matching, writes to output_dir."""
 
@@ -142,7 +143,7 @@ def match_worker(
             # Phase 1: AI structure detection
             log_f("Analyzing structure...")
             try:
-                sheet_previews = build_sheet_previews(file_path)
+                sheet_previews = build_sheet_previews(file_path, ai_preview_rows)
                 excel_cfg_file = client.analyze_excel_structure(
                     sheet_previews, provider, language
                 )
@@ -449,7 +450,8 @@ class MatchFrame(BaseFrame):
                   self.app.cfg.get("server_url", "http://localhost:4004"),
                   self.app.cfg.get("timeout", 600),
                   excel_cfg, self._queue, self._stop_event,
-                  self.app.cfg.get("xsuaa")),
+                  self.app.cfg.get("xsuaa"),
+                  self.app.cfg.get("ai_preview_rows", 15)),
             daemon=True,
         )
         thr.start()

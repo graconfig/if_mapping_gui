@@ -11,6 +11,7 @@ DEFAULTS: dict = {
     "language": "ja",
     "ui_language": "ja",
     "timeout": 600,
+    "ai_preview_rows": 15,
     "last_input_dir": "",
     "last_output_dir": "",
 }

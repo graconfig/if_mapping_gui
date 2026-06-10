@@ -6,49 +6,10 @@ import i18n
 from config import EXCEL_DEFAULTS
 from gui.frames import BaseFrame
 
-_FIELD_LABELS: dict[str, str] = {
-    "module": "module", "if_name": "if_name", "if_desc": "if_desc",
-    "field_name": "field_name", "is_append": "is_append", "key_flag": "key_flag",
-    "obligatory": "obligatory", "data_type": "data_type", "table_id": "table_id",
-    "field_id": "field_id", "length_total": "length_total", "length_dec": "length_dec",
-    "field_text": "field_text", "sample_value": "sample_value", "remark": "remark",
-    "verify": "verify",
-    "notes": "notes", "match_score": "match_score", "match_source": "match_source",
-}
-
-
-def _build_col_grid(parent: ctk.CTkFrame, label: str, fields: dict[str, str],
-                    entries: dict[str, ctk.CTkEntry]) -> None:
-    """Build a labelled group of field→column letter entries in a 3-up grid."""
-    ctk.CTkLabel(parent, text=label, font=("", 11, "bold"), text_color="#94a3b8").pack(
-        anchor="w", padx=4, pady=(8, 2)
-    )
-    grid = ctk.CTkFrame(parent, fg_color="transparent")
-    grid.pack(fill="x", padx=4)
-
-    items = list(fields.items())
-    for idx, (key, default_val) in enumerate(items):
-        col = idx % 3
-        row = idx // 3
-        cell = ctk.CTkFrame(grid, fg_color="transparent")
-        cell.grid(row=row, column=col, padx=(0, 12), pady=2, sticky="w")
-        ctk.CTkLabel(cell, text=_FIELD_LABELS.get(key, key), font=("", 10),
-                     text_color="#64748b", width=90, anchor="w").pack(side="left")
-        entry = ctk.CTkEntry(cell, width=52)
-        entry.insert(0, default_val)
-        entry.pack(side="left")
-        entries[key] = entry
-
 
 class SettingsFrame(BaseFrame):
     def __init__(self, master, app, **kwargs):
         super().__init__(master, app, **kwargs)
-        self._excel_entries: dict[str, dict[str, ctk.CTkEntry]] = {
-            "detection": {},
-            "global": {},
-            "normal_header": {}, "normal_row": {}, "normal_output": {},
-            "sap_header": {},    "sap_row": {},    "sap_output": {},
-        }
         self._build()
 
     def _build(self):
@@ -98,7 +59,7 @@ class SettingsFrame(BaseFrame):
         ctk.CTkOptionMenu(opts_frame, variable=self._ui_lang_var,
                           values=["zh", "ja"], width=100).grid(row=1, column=2)
 
-        # ── Excel 列配置 ──────────────────────────────────────────────────────
+        # ── Excel 兜底配置 ────────────────────────────────────────────────────
         self._excel_label = ctk.CTkLabel(outer, text=i18n.t("settings.excel_section"), font=("", 13, "bold"))
         self._excel_label.pack(anchor="w", padx=20, pady=(16, 4))
         excel_section = ctk.CTkFrame(outer, fg_color="#1e293b", corner_radius=8)
@@ -115,6 +76,7 @@ class SettingsFrame(BaseFrame):
             e.pack()
             return e
 
+        # sheet names, row numbers, detection (fallback when AI fails)
         global_frame = ctk.CTkFrame(excel_section, fg_color="transparent")
         global_frame.pack(fill="x", padx=12, pady=(10, 4))
         self._sheet_head_entry  = _labeled_entry(global_frame, i18n.t("settings.sheet_head"), excel_cfg["sheet_head"])
@@ -123,27 +85,15 @@ class SettingsFrame(BaseFrame):
         self._start_row_entry   = _labeled_entry(global_frame, i18n.t("settings.start_row"),  excel_cfg["start_row"],  width=60)
 
         det_frame = ctk.CTkFrame(excel_section, fg_color="transparent")
-        det_frame.pack(fill="x", padx=12, pady=(4, 8))
+        det_frame.pack(fill="x", padx=12, pady=(4, 12))
         det = excel_cfg["detection"]
         self._det_col_entry     = _labeled_entry(det_frame, i18n.t("settings.det_col"),     det["col"],     width=52)
         self._det_row_entry     = _labeled_entry(det_frame, i18n.t("settings.det_row"),     det["row"],     width=60)
         self._det_keyword_entry = _labeled_entry(det_frame, i18n.t("settings.det_keyword"), det["keyword"], width=80)
-
-        tab = ctk.CTkTabview(excel_section)
-        tab.pack(fill="x", padx=12, pady=(0, 12))
-        tab.add(i18n.t("settings.dir_normal"))
-        tab.add(i18n.t("settings.dir_sap"))
-
-        for direction, tab_key, hkey, rkey, okey in [
-            ("normal", "settings.dir_normal", "normal_header", "normal_row", "normal_output"),
-            ("sap",    "settings.dir_sap",    "sap_header",    "sap_row",    "sap_output"),
-        ]:
-            dir_cfg = excel_cfg["directions"][direction]
-            scroll = ctk.CTkScrollableFrame(tab.tab(i18n.t(tab_key)), height=340)
-            scroll.pack(fill="both", expand=True)
-            _build_col_grid(scroll, i18n.t("settings.input_header_cols"), dir_cfg["input_header_cols"], self._excel_entries[hkey])
-            _build_col_grid(scroll, i18n.t("settings.input_row_cols"),    dir_cfg["input_row_cols"],    self._excel_entries[rkey])
-            _build_col_grid(scroll, i18n.t("settings.output_cols"),       dir_cfg["output_cols"],       self._excel_entries[okey])
+        self._preview_rows_entry = _labeled_entry(
+            det_frame, i18n.t("settings.ai_preview_rows"),
+            self.app.cfg.get("ai_preview_rows", 15), width=60,
+        )
 
         self._save_settings_btn = ctk.CTkButton(outer, text=i18n.t("settings.save_btn"), width=120, command=self._save)
         self._save_settings_btn.pack(anchor="e", padx=20, pady=12)
@@ -172,6 +122,10 @@ class SettingsFrame(BaseFrame):
             self.app.cfg["timeout"] = int(self._timeout_entry.get())
         except ValueError:
             pass
+        try:
+            self.app.cfg["ai_preview_rows"] = int(self._preview_rows_entry.get())
+        except ValueError:
+            pass
 
         excel_cfg = self.app.cfg.setdefault("excel", {})
         excel_cfg["sheet_head"] = self._sheet_head_entry.get().strip()
@@ -188,21 +142,6 @@ class SettingsFrame(BaseFrame):
             excel_cfg["detection"]["row"] = int(self._det_row_entry.get())
         except ValueError:
             pass
-
-        for direction, hkey, rkey, okey in [
-            ("normal", "normal_header", "normal_row", "normal_output"),
-            ("sap",    "sap_header",    "sap_row",    "sap_output"),
-        ]:
-            dir_cfg = excel_cfg.setdefault("directions", {}).setdefault(direction, {})
-            dir_cfg["input_header_cols"] = {
-                k: e.get().strip().upper() for k, e in self._excel_entries[hkey].items()
-            }
-            dir_cfg["input_row_cols"] = {
-                k: e.get().strip().upper() for k, e in self._excel_entries[rkey].items()
-            }
-            dir_cfg["output_cols"] = {
-                k: e.get().strip().upper() for k, e in self._excel_entries[okey].items()
-            }
 
         config.save(self.app.cfg)
 
