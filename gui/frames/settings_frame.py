@@ -3,7 +3,6 @@ import threading
 import customtkinter as ctk
 import config
 import i18n
-from config import EXCEL_DEFAULTS
 from gui.frames import BaseFrame
 
 
@@ -59,41 +58,14 @@ class SettingsFrame(BaseFrame):
         ctk.CTkOptionMenu(opts_frame, variable=self._ui_lang_var,
                           values=["zh", "ja"], width=100).grid(row=1, column=2)
 
-        # ── Excel 兜底配置 ────────────────────────────────────────────────────
-        self._excel_label = ctk.CTkLabel(outer, text=i18n.t("settings.excel_section"), font=("", 13, "bold"))
-        self._excel_label.pack(anchor="w", padx=20, pady=(16, 4))
-        excel_section = ctk.CTkFrame(outer, fg_color="#1e293b", corner_radius=8)
-        excel_section.pack(fill="x", padx=20, pady=(0, 8))
-
-        excel_cfg = self.app.cfg.get("excel", EXCEL_DEFAULTS)
-
-        def _labeled_entry(parent, label, value, width=160) -> ctk.CTkEntry:
-            f = ctk.CTkFrame(parent, fg_color="transparent")
-            f.pack(side="left", padx=(0, 16))
-            ctk.CTkLabel(f, text=label, font=("", 10), text_color="#64748b").pack(anchor="w")
-            e = ctk.CTkEntry(f, width=width)
-            e.insert(0, str(value))
-            e.pack()
-            return e
-
-        # sheet names, row numbers, detection (fallback when AI fails)
-        global_frame = ctk.CTkFrame(excel_section, fg_color="transparent")
-        global_frame.pack(fill="x", padx=12, pady=(10, 4))
-        self._sheet_head_entry  = _labeled_entry(global_frame, i18n.t("settings.sheet_head"), excel_cfg["sheet_head"])
-        self._sheet_data_entry  = _labeled_entry(global_frame, i18n.t("settings.sheet_data"), excel_cfg["sheet_data"])
-        self._header_row_entry  = _labeled_entry(global_frame, i18n.t("settings.header_row"), excel_cfg["header_row"], width=60)
-        self._start_row_entry   = _labeled_entry(global_frame, i18n.t("settings.start_row"),  excel_cfg["start_row"],  width=60)
-
-        det_frame = ctk.CTkFrame(excel_section, fg_color="transparent")
-        det_frame.pack(fill="x", padx=12, pady=(4, 12))
-        det = excel_cfg["detection"]
-        self._det_col_entry     = _labeled_entry(det_frame, i18n.t("settings.det_col"),     det["col"],     width=52)
-        self._det_row_entry     = _labeled_entry(det_frame, i18n.t("settings.det_row"),     det["row"],     width=60)
-        self._det_keyword_entry = _labeled_entry(det_frame, i18n.t("settings.det_keyword"), det["keyword"], width=80)
-        self._preview_rows_entry = _labeled_entry(
-            det_frame, i18n.t("settings.ai_preview_rows"),
-            self.app.cfg.get("ai_preview_rows", 15), width=60,
-        )
+        # ── AI 配置 ───────────────────────────────────────────────────────────
+        ai_frame = ctk.CTkFrame(outer, fg_color="transparent")
+        ai_frame.pack(fill="x", **pad)
+        self._ai_preview_label = ctk.CTkLabel(ai_frame, text=i18n.t("settings.ai_preview_rows"), font=("", 11))
+        self._ai_preview_label.pack(side="left")
+        self._preview_rows_entry = ctk.CTkEntry(ai_frame, width=60)
+        self._preview_rows_entry.insert(0, str(self.app.cfg.get("ai_preview_rows", 15)))
+        self._preview_rows_entry.pack(side="left", padx=(8, 0))
 
         self._save_settings_btn = ctk.CTkButton(outer, text=i18n.t("settings.save_btn"), width=120, command=self._save)
         self._save_settings_btn.pack(anchor="e", padx=20, pady=12)
@@ -127,22 +99,6 @@ class SettingsFrame(BaseFrame):
         except ValueError:
             pass
 
-        excel_cfg = self.app.cfg.setdefault("excel", {})
-        excel_cfg["sheet_head"] = self._sheet_head_entry.get().strip()
-        excel_cfg["sheet_data"] = self._sheet_data_entry.get().strip()
-        try:
-            excel_cfg["header_row"] = int(self._header_row_entry.get())
-            excel_cfg["start_row"]  = int(self._start_row_entry.get())
-        except ValueError:
-            pass
-        excel_cfg.setdefault("detection", {})
-        excel_cfg["detection"]["col"]     = self._det_col_entry.get().strip().upper()
-        excel_cfg["detection"]["keyword"] = self._det_keyword_entry.get().strip()
-        try:
-            excel_cfg["detection"]["row"] = int(self._det_row_entry.get())
-        except ValueError:
-            pass
-
         config.save(self.app.cfg)
 
         if new_ui_lang != i18n.current():
@@ -160,5 +116,5 @@ class SettingsFrame(BaseFrame):
         self._provider_label.configure(text=i18n.t("settings.provider_label"))
         self._lang_label.configure(text=i18n.t("settings.lang_label"))
         self._ui_lang_label.configure(text=i18n.t("settings.ui_lang_label"))
-        self._excel_label.configure(text=i18n.t("settings.excel_section"))
+        self._ai_preview_label.configure(text=i18n.t("settings.ai_preview_rows"))
         self._save_settings_btn.configure(text=i18n.t("settings.save_btn"))
