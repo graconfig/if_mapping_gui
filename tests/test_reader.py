@@ -36,6 +36,7 @@ def test_preview_text_format():
     path = _make_xlsx({"Data": [["alpha", "beta"]]})
     previews = build_sheet_previews(path)
     text = previews[0]["previewText"]
+    assert "row1:" in text
     assert "[A]alpha" in text
     assert "[B]beta" in text
     path.unlink()

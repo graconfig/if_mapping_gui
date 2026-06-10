@@ -17,8 +17,9 @@ PREVIEW_ROWS = 15
 def build_sheet_previews(path: Path) -> list[dict]:
     """Return [{sheetName, previewText}] for all non-empty sheets.
 
-    previewText: first PREVIEW_ROWS rows, each cell as [ColLetter]value,
-    cells separated by spaces, rows separated by newlines.
+    previewText: first PREVIEW_ROWS rows, each prefixed with its 1-based row number
+    so the AI can return exact row numbers.  Format per line:
+        row{N}: [ColLetter]value [ColLetter]value ...
     Empty sheets (all preview rows are None) are skipped.
     """
     try:
@@ -31,14 +32,16 @@ def build_sheet_previews(path: Path) -> list[dict]:
         for sheet_name in wb.sheetnames:
             ws = wb[sheet_name]
             lines: list[str] = []
-            for row in ws.iter_rows(max_row=PREVIEW_ROWS, values_only=False):
+            for row_idx, row in enumerate(
+                ws.iter_rows(max_row=PREVIEW_ROWS, values_only=False), start=1
+            ):
                 cells = []
                 for cell in row:
                     if cell.value is not None:
                         col_letter = get_column_letter(cell.column)
                         cells.append(f"[{col_letter}]{cell.value}")
                 if cells:
-                    lines.append(" ".join(cells))
+                    lines.append(f"row{row_idx}: " + " ".join(cells))
             if lines:
                 previews.append({
                     "sheetName":   sheet_name,
