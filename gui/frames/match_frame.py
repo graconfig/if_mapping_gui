@@ -2,6 +2,7 @@
 import json
 import queue
 import threading
+import time
 import uuid
 from pathlib import Path
 from tkinter import filedialog
@@ -172,6 +173,20 @@ def match_worker(
                         other_direction:    excel_cfg["directions"].get(other_direction, ai_dir_entry),
                     },
                 }
+                _rc = excel_cfg_resolved
+                log_f(
+                    f"AI structure: sheet_head={_rc['sheet_head']!r} "
+                    f"sheet_data={_rc['sheet_data']!r} "
+                    f"header_row={_rc['header_row']} "
+                    f"start_row={_rc['start_row']} "
+                    f"direction={detected_direction!r}"
+                )
+                _cols = ai_dir_entry["input_row_cols"]
+                log_f(
+                    "AI columns: " + "  ".join(
+                        f"{k}={v}" for k, v in _cols.items() if v
+                    )
+                )
             except Exception as ai_err:
                 log_f(f"AI structure analysis failed ({ai_err}), falling back to config", "warn")
                 excel_cfg_resolved = excel_cfg
@@ -505,11 +520,19 @@ class MatchFrame(BaseFrame):
             self._log_append(i18n.t("match.export_done_log", name=out.name), "info")
             if delete_inputs:
                 src = Path(file_str)
-                try:
-                    src.unlink()
-                    self._log_append(i18n.t("match.delete_input_log", name=src.name), "info")
-                except Exception as e:
-                    self._log_append(f"[WARN] 删除失败 {src.name}: {e}", "warn")
+                for attempt in range(3):
+                    try:
+                        src.unlink()
+                        self._log_append(i18n.t("match.delete_input_log", name=src.name), "info")
+                        break
+                    except PermissionError:
+                        if attempt < 2:
+                            time.sleep(0.3)
+                        else:
+                            self._log_append(f"[WARN] 删除失败 {src.name}: 文件被占用", "warn")
+                    except Exception as e:
+                        self._log_append(f"[WARN] 删除失败 {src.name}: {e}", "warn")
+                        break
 
     def retranslate(self) -> None:
         self._input_dir_label.configure(text=i18n.t("match.input_dir_label"))
